@@ -1,0 +1,143 @@
+EXPLICACAO DO CODIGO - APP DE CHECK-IN
+Semana da Computacao 2026
+
+Material de estudo para a demonstracao em aula
+Integrantes: Gustavo Daitx e Tiago Porto
+
+VISÃO GERAL
+
+O projeto e um aplicativo Flutter para gerar ingressos com QR Code e controlar
+o check-in de um evento. O fluxo principal e:
+
+1. Informar o nome e, se quiser, o e-mail do participante.
+2. Gerar o ingresso, que mostra os dados e um QR Code.
+3. Abrir o leitor pela camera e apontar para um QR Code.
+4. Validar o conteudo lido e mostrar o resultado.
+5. Atualizar a lista de presenca quando o check-in for valido e inedito.
+
+A inicializacao do aplicativo esta em lib/main.dart. A tela e as regras do
+check-in estao principalmente em lib/tela_principal.dart. O pacote qr_flutter
+desenha o QR Code; mobile_scanner acessa a camera e interpreta o codigo. Os
+testes automatizados das regras e da interface estao em test/widget_test.dart.
+
+R1 - PAGINA E TEMA
+
+Em main.dart, a funcao main inicia o Flutter chamando runApp com
+AppCheckinEvento. Esse widget configura o MaterialApp, o tema Material 3 e a
+tela inicial TelaPrincipal.
+
+O tema usa verde-petroleo (#00695C) como cor principal, com fundo claro. A
+AppBar tambem e verde e apresenta o titulo "Semana da Computacao 2026".
+Na tela principal, um Scaffold organiza a barra superior e o conteudo.
+
+TelaPrincipal e um StatefulWidget porque os dados mudam durante o uso: o
+formulario, o ingresso, a camera, o resultado da leitura e a lista de
+presenca. O conteudo normal fica em um SingleChildScrollView para poder rolar
+em telas menores. Nele aparecem os campos de nome e e-mail, o botao para gerar
+ingresso, o card do ingresso, a area de check-in e a lista de presentes.
+
+R2 - INGRESSO E DADOS DO PARTICIPANTE
+
+Os campos de nome e e-mail sao TextField controlados por
+TextEditingController. O nome e obrigatorio: o botao "Gerar ingresso" fica
+desabilitado quando o nome esta vazio ou contem somente espacos. O e-mail e
+opcional. Os controllers sao liberados em dispose quando a tela e encerrada.
+
+Ao tocar em "Gerar ingresso", o metodo _gerarIngresso remove espacos do inicio
+e do fim dos valores. Se o nome continuar vazio, nao gera o ingresso. Caso
+contrario, monta os dados no formato:
+
+CHECKIN|nome|e-mail
+
+Por exemplo:
+
+CHECKIN|Ana Souza|ana@email.com
+
+O estado da tela guarda o nome, o e-mail e o texto completo. Em seguida, o
+card do ingresso mostra o nome e, se foi informado, o e-mail. QrImageView, da
+biblioteca qr_flutter, transforma o texto completo em um QR Code para ser
+apresentado ao leitor. O mesmo formato e usado depois na validacao. Um e-mail
+vazio e permitido, por exemplo: CHECKIN|Carlos Lima|.
+
+R3 - LEITURA PELA CAMERA
+
+O botao "Ler ingresso" abre a interface do scanner, substituindo
+temporariamente o conteudo principal. O metodo _abrirScanner cria um
+MobileScannerController configurado para usar a camera traseira e evitar
+deteccoes duplicadas consecutivas. A tela de leitura mostra a imagem da camera,
+uma moldura para enquadrar o codigo, a instrucao "Aponte para o QR do
+ingresso" e o botao "Cancelar".
+
+O widget MobileScanner chama _aoDetectar quando encontra um codigo. O
+aplicativo usa o valor de texto lido do primeiro QR detectado. A variavel
+_processandoQr impede processar varias deteccoes ao mesmo tempo. Depois de
+receber um valor valido para processamento, o app para e descarta o
+controller da camera, fecha a tela do scanner e encaminha o texto para
+validacao.
+
+As permissoes necessarias estao declaradas para Android e iOS. Se a camera
+nao puder ser acessada, o scanner mostra uma mensagem orientando a verificar
+as permissoes do dispositivo. O botao "Cancelar" fecha a camera e volta para
+a tela principal sem adicionar ninguem a lista.
+
+R4 - VALIDACAO DOS TRES CENARIOS
+
+A validacao acontece em _processarQrCode. Primeiro, o texto lido e separado
+pelo caractere |. Para ser reconhecido como ingresso, precisa ter exatamente
+tres partes, com o prefixo CHECKIN na primeira parte e um nome nao vazio na
+segunda. Essas verificacoes rejeitam links, textos aleatorios, partes
+faltando, nome vazio ou partes extras.
+
+1. Ingresso valido na primeira leitura:
+   Se a estrutura estiver correta e o nome ainda nao estiver na lista, o app
+   adiciona o nome e mostra "✔ Check-in confirmado", com indicacao verde.
+
+2. Ingresso duplicado:
+   Antes de adicionar, o app compara o nome lido com os nomes ja presentes,
+   ignorando diferencas entre letras maiusculas/minusculas e espacos nas
+   extremidades. Se ja existir, mostra "⚠ Já fez check-in", em laranja, e nao
+   adiciona uma segunda entrada. A comparacao e pelo nome, nao pelo e-mail.
+
+3. Link ou QR Code invalido:
+   Se o conteudo nao seguir o formato exigido, mostra "✖ QR inválido", em
+   vermelho, e nao altera a lista. Por exemplo, uma URL, texto aleatorio ou
+   CHECKIN|Ana Souza (sem a terceira parte) e rejeitado.
+
+Os tres resultados sao representados pelo enum TipoResultadoCheckin:
+sucesso, duplicado e invalido. A area de resultado escolhe icone e cores de
+acordo com esse estado e pode mostrar tambem o nome do participante.
+
+R5 - LISTA DE PRESENCA
+
+A lista e mantida na memoria da tela em _presentes. Quando um codigo valido e
+processado pela primeira vez, _processarQrCode usa setState para incluir o
+nome. O Flutter reconstrui a interface imediatamente: o contador "Presentes
+(N)" muda, e o nome aparece na lista com um icone de confirmacao.
+
+No inicio, a lista apresenta "Presentes (0)" e a mensagem "Nenhum
+participante confirmado ainda.". Codigos duplicados ou invalidos atualizam a
+mensagem do resultado, mas nao acrescentam nomes. A grafia do nome original
+e preservada para exibicao.
+
+IMPORTANTE SOBRE O ARMAZENAMENTO
+
+A atualizacao em tempo real descrita aqui significa que a tela reflete cada
+check-in imediatamente durante a execucao. A lista esta somente na memoria
+(_presentes): o projeto nao implementa banco de dados, servidor ou
+sincronizacao entre dispositivos. Portanto, fechar ou reiniciar o aplicativo
+apaga as presencas dessa sessao.
+
+COMO EXPLICAR A DEMONSTRACAO
+
+Uma forma simples de apresentar e gerar primeiro um ingresso para um
+participante e mostrar o QR Code criado. Depois, abrir "Ler ingresso" e
+escanear o codigo: na primeira leitura aparece a confirmacao e a lista passa
+a mostrar um presente. Ler o mesmo codigo novamente demonstra o aviso de
+duplicidade sem aumentar o contador. Por fim, escanear um QR Code com um link
+ou texto qualquer demonstra o resultado de codigo invalido, sem alterar a
+lista.
+
+Os testes em test/widget_test.dart cobrem o botao e a geracao do ingresso, o
+conteudo do QR, os tres resultados de validacao, a comparacao de nomes sem
+diferenciar maiusculas/minusculas e o cancelamento do scanner preservando a
+lista existente.
